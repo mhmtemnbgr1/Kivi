@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 import storage  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs")
-SIZE = (100, 36)
+SIZE = (100, 46)
 
 
 def seed_demo():

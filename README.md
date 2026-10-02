@@ -24,13 +24,14 @@ python typing_test.py
 ```
 
 Python 3.9+ ve renk destekleyen bir terminal (Windows Terminal, PowerShell, iTerm2, …)
-yeterlidir. IDE çıktı panelinde değil, gerçek bir terminalde çalıştır.
+yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerekir. Terminal 40+ satırsa klavye yüksek (3 satırlık) tuşlarla çizilir. IDE çıktı panelinde değil, gerçek bir terminalde çalıştır.
 
 ## Özellikler
 
 - ⏱️ **Süre ayarlı test** — 15 / 30 / 60 / 120 sn. Süre ilk tuşa basınca başlar.
 - 📈 **Canlı WPM grafiği** ve doğruluk göstergesi, ilerleme çubuğu.
-- 🎹 **Ekran klavyesi** — F klavye (Türkçe) ve QWERTY; sıradaki tuş mavi, yanlış basılan tuş kırmızı yanar.
+- 🎹 **Mekanik klavye görünümü** — gölgeli tuş başlıkları, F klavye (Türkçe) ve QWERTY; sıradaki tuş mavi, yanlış basılan tuş kırmızı yanar, bastığın tuş aşağı iner.
+- 🔊 **Mekanik switch sesleri** — Mavi (clicky), Kırmızı (lineer), Kahverengi (tactile), Siyah (derin thock) veya sessiz. Sesler ek paket gerektirmeden otomatik üretilir; boşluk ve silme tuşunun sesi farklıdır.
 - 🇹🇷 / 🇬🇧 **İki dil** — Türkçe (F klavye) ve İngilizce (QWERTY).
 - 🔥 **Zayıf harf ısı haritası** — hata oranına göre klavye üzerinde boyanır; tablo tuşun
   konumunu (sıra / el) da söyler.
@@ -42,9 +43,10 @@ yeterlidir. IDE çıktı panelinde değil, gerçek bir terminalde çalıştır.
 | Ekran | Tuş | İşlev |
 |-------|-----|-------|
 | Menü | `Enter` / `L` / `D` / `M` | Başla / dil / süre / mod değiştir |
-| Menü | `W` / `X` / `Q` | İstatistik / verileri sıfırla / çıkış |
+| Menü | `S` / `W` / `X` / `Q` | Switch sesi / istatistik / verileri sıfırla / çıkış |
 | Test | `Boşluk` | Kelimeyi onayla (boşken yok sayılır) |
 | Test | `Backspace` / `Tab` / `Esc` | Sil / yeniden başla / bitir ve sonucu gör |
+| Test | `F2` | Switch sesini değiştir |
 | İstatistik | `1` `2` `3` / `L` / `Esc` | Sekme / dil / geri |
 
 ## Puanlama
@@ -59,6 +61,7 @@ yeterlidir. IDE çıktı panelinde değil, gerçek bir terminalde çalıştır.
 |-------|--------|
 | `typing_test.py` | Giriş noktası |
 | `ui.py` | Textual arayüzü: menü, test, sonuç, istatistik |
+| `sound.py` | Switch seslerini sentezler ve çalar (Windows: winsound, macOS: afplay, Linux: paplay/aplay) |
 | `engine.py` | Terminalden bağımsız test mantığı (`Session`) |
 | `storage.py` | İstatistik/havuz kaydı ve analiz (JSON) |
 | `words.py` | Türkçe ve İngilizce kelime havuzları |

@@ -11,8 +11,11 @@ from textual.containers import Center, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Sparkline, Static, TabbedContent, TabPane
 
+import time
+
 import engine
 import layouts
+import sound
 import storage
 
 DURATIONS = [15, 30, 60, 120]
@@ -27,39 +30,83 @@ KEY_BG, KEY_FG = "#21262d", "#c9d1d9"
 # ---------------------------------------------------------------------------
 # Çizim yardımcıları
 # ---------------------------------------------------------------------------
-def render_keyboard(lang, nxt=None, wrong=None, heat=None):
-    """Ekran klavyesi. nxt: basılacak tuş, wrong: yanlış basılan tuş,
-    heat: {harf: hata oranı %} verilirse ısı haritası olarak boyar."""
-    out = Text(justify="center")
+PLATE = "#161b22"   # klavye gövdesi (tuşların altındaki plaka)
+
+# (yüz rengi, kenar/gölge rengi, yazı rengi)
+CAP = ("#2d333b", "#1b1f24", "#adbac7")
+CAP_NEXT = ("#1f6feb", "#0b3d91", "#ffffff")
+CAP_WRONG = ("#da3633", "#7d1a18", "#ffffff")
+CAP_DOWN_OK = ("#3fb950", "#3fb950", "#04260f")
+CAP_DOWN_BAD = ("#f85149", "#f85149", "#ffffff")
+HEAT_HI = ("#da3633", "#7d1a18", "#ffffff")
+HEAT_MID = ("#f0883e", "#8a4a14", "#1b1f24")
+HEAT_LO = ("#d29922", "#7a5710", "#1b1f24")
+
+
+def render_keyboard(lang, nxt=None, wrong=None, heat=None, down=None, down_ok=True,
+                    tall=True):
+    """Mekanik klavye çizimi.
+
+    nxt: sıradaki tuş (mavi)   wrong: yanlış basılan tuş (kırmızı)
+    down: şu an basılı tuş (tuş aşağı iner)   heat: {harf: hata %} -> ısı haritası
+    tall: 3 satırlık yüksek tuşlar (küçük terminalde 2 satırlık).
+    """
+    def colors_for(ch):
+        if heat is not None:
+            rate = heat.get(ch)
+            if rate is None:
+                return CAP
+            return HEAT_HI if rate >= 25 else HEAT_MID if rate >= 12 else HEAT_LO
+        if ch == down:
+            return CAP_DOWN_OK if down_ok else CAP_DOWN_BAD
+        if ch == wrong:
+            return CAP_WRONG
+        if ch == nxt:
+            return CAP_NEXT
+        return CAP
+
+    rows = []   # her satır: [(etiket, genişlik, ch), ...]
     for r, row in enumerate(layouts.KEY_ROWS[lang]):
-        out.append("  " * layouts.ROW_OFFSET[r])
+        keys = []
         for ch in row:
-            label = f" {ch.upper() if ch != 'i' or lang == 'en' else 'İ'} "
-            if heat is not None:
-                rate = heat.get(ch)
-                if rate is None:
-                    style = f"{KEY_FG} on {KEY_BG}"
-                elif rate >= 25:
-                    style = "bold white on #da3633"
-                elif rate >= 12:
-                    style = "bold black on #f0883e"
+            label = "İ" if (ch == "i" and lang == "tr") else ch.upper()
+            keys.append((label, 5, ch))
+        rows.append((layouts.ROW_OFFSET[r] * 2, keys))
+    space_label = "BOŞLUK" if lang == "tr" else "SPACE"
+    rows.append((8, [(space_label.center(25), 25, " ")]))
+
+    out = Text()
+    for indent, keys in rows:
+        lines = [Text(), Text(), Text()] if tall else [Text(), Text()]
+        for line in lines:
+            line.append(" " * indent, style=f"on {PLATE}")
+        for label, w, ch in keys:
+            face, edge, fg = colors_for(ch)
+            pressed = ch == down and heat is None
+            if tall:
+                top, mid, bot = lines
+                if pressed:   # tuş aşağıda: üst kenar kaybolur, yüz bir satır iner
+                    top.append(" " * w, style=f"on {PLATE}")
+                    mid.append("▄" * w, style=f"{face} on {PLATE}")
+                    bot.append(label.center(w), style=f"bold {fg} on {face}")
                 else:
-                    style = "black on #d29922"
-            elif ch == nxt:
-                style = "bold black on #58a6ff"
-            elif ch == wrong:
-                style = "bold white on #da3633"
+                    top.append("▄" * w, style=f"{face} on {PLATE}")
+                    mid.append(label.center(w), style=f"bold {fg} on {face}")
+                    bot.append("▀" * w, style=f"{edge} on {PLATE}")
             else:
-                style = f"{KEY_FG} on {KEY_BG}"
-            out.append(label, style=style)
-            out.append(" ")
-        out.append("\n")
-    space = "bold black on #58a6ff" if nxt == " " else f"{KEY_FG} on {KEY_BG}"
-    if wrong == " ":
-        space = "bold white on #da3633"
-    out.append("  " * 3)
-    out.append(" " * 4 + "BOŞLUK" + " " * 4 if lang == "tr" else " " * 5 + "SPACE" + " " * 5,
-               style=space)
+                mid, bot = lines
+                if pressed:
+                    mid.append(" " * w, style=f"on {PLATE}")
+                    bot.append(label.center(w), style=f"bold {fg} on {face}")
+                else:
+                    mid.append(label.center(w), style=f"bold {fg} on {face}")
+                    bot.append("▀" * w, style=f"{edge} on {PLATE}")
+            for line in lines:
+                line.append(" ", style=f"on {PLATE}")
+        for line in lines:
+            out.append_text(line)
+            out.append("\n")
+    out.rstrip()
     return out
 
 
@@ -114,6 +161,7 @@ class HomeScreen(Screen):
         ("l", "lang", "Dil"),
         ("d", "duration", "Süre"),
         ("m", "mode", "Mod"),
+        ("s", "switch", "Switch"),
         ("w", "stats", "İstatistik"),
         ("x", "reset", "Sıfırla"),
         ("q", "app.quit", "Çık"),
@@ -146,7 +194,9 @@ class HomeScreen(Screen):
         s.append("  Süre   ", style=PENDING)
         s.append(f"{app.duration} sn\n", style="bold")
         s.append("  Mod    ", style=PENDING)
-        s.append(f"{MODES[app.mode]}", style="bold")
+        s.append(f"{MODES[app.mode]}\n", style="bold")
+        s.append("  Switch ", style=PENDING)
+        s.append(app.sound.label() if app.sound.available else "ses çalınamıyor", style="bold")
         self.query_one("#settings", Static).update(s)
 
         hist = storage.history(app.lang)
@@ -162,7 +212,8 @@ class HomeScreen(Screen):
         h.append("Enter", style=f"bold {ACCENT}"); h.append(" başla   ")
         h.append("L", style=f"bold {ACCENT}"); h.append(" dil   ")
         h.append("D", style=f"bold {ACCENT}"); h.append(" süre   ")
-        h.append("M", style=f"bold {ACCENT}"); h.append(" mod\n")
+        h.append("M", style=f"bold {ACCENT}"); h.append(" mod   ")
+        h.append("S", style=f"bold {ACCENT}"); h.append(" switch sesi\n")
         h.append("W", style=f"bold {ACCENT}"); h.append(" istatistik   ")
         h.append("X", style=f"bold {ACCENT}"); h.append(" sıfırla   ")
         h.append("Q", style=f"bold {ACCENT}"); h.append(" çıkış")
@@ -182,6 +233,11 @@ class HomeScreen(Screen):
 
     def action_mode(self):
         self.app.mode = "practice" if self.app.mode == "normal" else "normal"
+        self.refresh_view()
+
+    def action_switch(self):
+        self.app.sound.cycle()
+        self.app.sound.play("key")
         self.refresh_view()
 
     def action_stats(self):
@@ -242,11 +298,14 @@ class TestScreen(Screen):
         a = self.app
         self.session = engine.Session(a.lang, a.duration, a.mode)
         self._wrap_key = None
+        self.down, self.down_ok, self.down_until = None, True, 0.0
+        self.flash = ""
         self.query_one("#spark", Sparkline).data = [0]
         hint = Text(justify="center")
         hint.append("Esc", style=f"bold {ACCENT}"); hint.append(" bitir   ")
         hint.append("Tab", style=f"bold {ACCENT}"); hint.append(" yeniden başla   ")
-        hint.append("Boşluk", style=f"bold {ACCENT}"); hint.append(" kelimeyi onayla")
+        hint.append("Boşluk", style=f"bold {ACCENT}"); hint.append(" onayla   ")
+        hint.append("F2", style=f"bold {ACCENT}"); hint.append(" switch sesi")
         self.query_one("#hint", Static).update(hint)
         self.redraw()
 
@@ -256,6 +315,8 @@ class TestScreen(Screen):
 
     def tick(self):
         s = self.session
+        if self.down and time.time() > self.down_until:
+            self.down = None
         if s.started:
             s.sample()
             spark = self.query_one("#spark", Sparkline)
@@ -271,19 +332,38 @@ class TestScreen(Screen):
         key = event.key
         event.stop()
         event.prevent_default()
+        snd = self.app.sound
         if key == "escape":
             self.end()
+            return
         elif key == "tab":
             self.new_session()
+        elif key == "f2":
+            snd.cycle()
+            snd.play("key")
+            self.flash = f"Switch: {snd.label()}"
         elif key in ("space", "enter"):
-            s.commit()
+            if s.commit():
+                snd.play("space")
+            self.press(" ", True)
         elif key == "backspace":
             s.backspace()
+            snd.play("back")
         elif event.is_printable and event.character:
-            s.type_char(event.character)
+            ch = event.character
+            expected = s.next_char()
+            s.type_char(ch)
+            snd.play("key")
+            self.press(ch, ch == expected)
         else:
             return
         self.redraw()
+
+    def press(self, ch, ok):
+        """Basılan tuşu kısa süre 'aşağıda' göster."""
+        self.down = {"İ": "i", "I": "ı"}.get(ch, ch.lower())
+        self.down_ok = ok
+        self.down_until = time.time() + 0.14
 
     def end(self):
         s = self.session
@@ -310,6 +390,8 @@ class TestScreen(Screen):
         info.append(" doğruluk    ")
         info.append(f"{s.correct_words()}", style="bold")
         info.append(" kelime")
+        if self.flash:
+            info.append(f"\n{self.flash}", style=ACCENT)
         self.query_one("#info", Static).update(info)
 
         frac = s.remaining() / s.duration if s.started else 1.0
@@ -339,7 +421,9 @@ class TestScreen(Screen):
         self.query_one("#words", Static).update(body)
 
         self.query_one("#keyboard", Static).update(
-            render_keyboard(s.lang, nxt=s.next_char(), wrong=s.last_wrong))
+            render_keyboard(s.lang, nxt=s.next_char(), wrong=s.last_wrong,
+                            down=self.down, down_ok=self.down_ok,
+                            tall=self.size.height >= 40))
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +530,7 @@ class StatsScreen(Screen):
         for ch, err, total, rate, pos in rows:
             t.add_row(Text(ch, style=f"bold {BAD}"), str(err), str(total), f"%{rate:g}", pos)
         heat = {ch: rate for ch, _, _, rate, _ in storage.weak_letters(lang, top=99)}
-        kb = render_keyboard(lang, heat=heat)
+        kb = render_keyboard(lang, heat=heat, tall=False)
         if not rows:
             kb = Text("Henüz yeterli veri yok. Birkaç test yap!", style=PENDING, justify="center")
         self.query_one("#heat", Static).update(kb)
@@ -500,11 +584,11 @@ class KiviApp(App):
     #spark { height: 3; margin: 1 0; }
     Sparkline > .sparkline--max-color { color: #7ee787; }
     Sparkline > .sparkline--min-color { color: #58a6ff; }
-    #keyboard { height: 5; text-align: center; }
+    #keyboard { height: auto; text-align: center; }
     #big { text-align: center; margin: 1 0; }
     #rspark { height: 4; margin: 1 0; }
     #details { text-align: center; }
-    #heat { height: 5; margin: 1 0; text-align: center; }
+    #heat { height: auto; margin: 1 0; text-align: center; }
     #weak_t, #pool_t, #hist_t { height: 14; }
     #hspark { height: 3; margin-bottom: 1; }
     ConfirmScreen { align: center middle; }
@@ -517,6 +601,7 @@ class KiviApp(App):
         self.lang = "tr"
         self.duration = 30
         self.mode = "normal"
+        self.sound = sound.KeySound("brown")
 
     def on_mount(self):
         self.push_screen(HomeScreen())

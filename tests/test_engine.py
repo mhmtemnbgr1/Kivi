@@ -85,5 +85,20 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(storage.load()["tr"]["letter_total"]["e"], 1)
 
 
+class SoundTests(unittest.TestCase):
+    def test_every_switch_generates_wavs(self):
+        import sound
+        k = sound.KeySound("blue")
+        for sw in sound.ORDER[1:]:
+            for kind in ("key", "space", "back"):
+                for path in k._files(sw, kind):
+                    self.assertTrue(os.path.getsize(path) > 1000)
+
+    def test_cycle_wraps(self):
+        import sound
+        k = sound.KeySound("black")
+        self.assertEqual(k.cycle(), "off")
+
+
 if __name__ == "__main__":
     unittest.main()
