@@ -145,7 +145,23 @@ def _heat_face(rate):
     return gradient([YELLOW, ORANGE, RED], rate / 35.0)
 
 
-def render_keyboard(lang, t=0.0, nxt=None, wrong=None, heat=None, pressed=None, tall=True):
+FINGER_COLORS = [PINK, ORANGE, YELLOW, GREEN, CYAN, "#4d8dff", PURPLE, "#e056fd"]
+
+
+def finger_legend():
+    """Parmak renk açıklaması: ■ serçe ■ yüzük ... (sol -> sağ)"""
+    out = Text(justify="center")
+    short = ["serçe", "yüzük", "orta", "işaret", "işaret", "orta", "yüzük", "serçe"]
+    for i, name in enumerate(short):
+        if i == 4:
+            out.append("│ ", style=FAINT)
+        out.append("■ ", style=FINGER_COLORS[i])
+        out.append(name + " ", style=DIM)
+    return out
+
+
+def render_keyboard(lang, t=0.0, nxt=None, wrong=None, heat=None, pressed=None, tall=True,
+                    fingers=False, allowed=None):
     """Neon mekanik klavye.
 
     nxt: sıradaki tuş (pembe-camgöbeği arasında nabız gibi parlar)
@@ -153,15 +169,28 @@ def render_keyboard(lang, t=0.0, nxt=None, wrong=None, heat=None, pressed=None, 
     heat: {harf: hata %} -> ısı haritası
     pressed: {tuş: (basılma_zamanı, doğru_mu)} -> tuşlar basılınca iner ve yavaşça söner
     t: şimdiki zaman (animasyon için)
+    fingers: tuşları basılacak parmağa göre renklendirir
+    allowed: ders modunda henüz açılmamış (izinli olmayan) harfler soluk çizilir
     """
     pressed = pressed or {}
 
+    def base_look(ch):
+        if allowed is not None and ch.isalpha() and ch not in allowed:
+            return "#1a0f2b", "#120a20", FAINT                 # kilitli tuş
+        if fingers:
+            f = layouts.finger_of(lang, ch)
+            if f is not None:
+                face = lerp(CAP_FACE, FINGER_COLORS[f], 0.42)
+                return face, lerp(face, "#000000", 0.55), TEXT
+        return CAP_FACE, CAP_EDGE, CAP_TEXT
+
     def look(ch):
         """(yüz, kenar, yazı, aşağıda_mı)"""
+        bface, bedge, btext = base_look(ch)
         if heat is not None:
             rate = heat.get(ch)
             if rate is None:
-                return CAP_FACE, CAP_EDGE, CAP_TEXT, False
+                return bface, bedge, btext, False
             f = _heat_face(rate)
             return f, lerp(f, "#000000", 0.55), BG, False
         if ch in pressed:
@@ -169,7 +198,7 @@ def render_keyboard(lang, t=0.0, nxt=None, wrong=None, heat=None, pressed=None, 
             k = 1.0 - (t - t0) / 0.45
             if k > 0:
                 color = GREEN if ok else RED
-                face = lerp(CAP_FACE, color, k)
+                face = lerp(bface, color, k)
                 return face, face, BG if k > 0.5 else TEXT, k > 0.45
         if ch == wrong:
             return RED, lerp(RED, "#000000", 0.5), TEXT, False
@@ -177,7 +206,7 @@ def render_keyboard(lang, t=0.0, nxt=None, wrong=None, heat=None, pressed=None, 
             glow = (math.sin(t * 5.0) + 1) / 2 * 0.65
             f = lerp(CYAN, PINK, glow)
             return f, lerp(f, "#000000", 0.5), BG, False
-        return CAP_FACE, CAP_EDGE, CAP_TEXT, False
+        return bface, bedge, btext, False
 
     rows = []
     for r, row in enumerate(layouts.KEY_ROWS[lang]):

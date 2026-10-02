@@ -50,3 +50,46 @@ KEY_ROWS = {
     "en": ["qwertyuiop", "asdfghjkl", "zxcvbnm,."],
 }
 ROW_OFFSET = [0, 1, 2]  # satırların yarım tuş kayması (gerçek klavye gibi)
+
+
+# --- Parmak eşlemesi (standart on parmak yazım) ---------------------------
+FINGER_NAMES = ["sol serçe", "sol yüzük", "sol orta", "sol işaret",
+                "sağ işaret", "sağ orta", "sağ yüzük", "sağ serçe"]
+_COL_FINGER = [0, 1, 2, 3, 3, 4, 4, 5, 6, 7, 7, 7]   # satırdaki sütuna göre parmak
+
+
+def finger_of(lang, ch):
+    """Harfin hangi parmakla basılacağı (0-7); bilinmiyorsa None."""
+    for row in KEY_ROWS[lang]:
+        if ch in row:
+            return _COL_FINGER[row.index(ch)]
+    return None
+
+
+# --- Dersler: (başlık, bu derste öğrenilen yeni harfler) ------------------
+# Her ders öncekileri kapsar (harfler birikir).
+LESSONS = {
+    "tr": [
+        ("Ana sıra · sol el", "asdfg"),
+        ("Ana sıra · sağ el", "hjkli"),
+        ("Üst sıra · sol el", "qwert"),
+        ("Üst sıra · sağ el", "yuıop"),
+        ("Alt sıra", "zxcvbnm"),
+        ("Türkçe harfler", "ğüşöç"),
+    ],
+    "en": [
+        ("Home row · left hand", "asdfg"),
+        ("Home row · right hand", "hjkl"),
+        ("Top row · left hand", "qwert"),
+        ("Top row · right hand", "yuiop"),
+        ("Bottom row", "zxcvbnm"),
+    ],
+}
+
+
+def lesson_letters(lang, level):
+    """(izinli harfler, bu dersin odak harfleri)"""
+    lessons = LESSONS[lang]
+    level = max(1, min(level, len(lessons)))
+    allowed = "".join(l[1] for l in lessons[:level])
+    return set(allowed), lessons[level - 1][1]

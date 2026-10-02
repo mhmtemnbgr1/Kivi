@@ -9,8 +9,12 @@ yanlışlarını ve zayıf harflerini hatırlayıp sana özel alıştırma yapt�
   <img src="docs/test.svg" alt="Canlı test ekranı" width="48%">
 </p>
 <p align="center">
-  <img src="docs/result.svg" alt="Sonuç ekranı" width="48%">
+  <img src="docs/lesson.svg" alt="Ders modu: parmak renkleri" width="48%">
+  <img src="docs/result.svg" alt="Ölüm modu sonucu" width="48%">
+</p>
+<p align="center">
   <img src="docs/stats.svg" alt="Zayıf harf ısı haritası" width="48%">
+  <img src="docs/pairs.svg" alt="Harf çifti analizi" width="48%">
 </p>
 
 > Görseller sentetik demo verisiyle üretilmiştir; kişisel veri içermez
@@ -41,18 +45,37 @@ yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerek
 - 🔥 **Zayıf harf ısı haritası** — hata oranına göre klavye üzerinde boyanır; tablo tuşun
   konumunu (sıra / el) da söyler.
 - 🎯 **Alıştırma modu** — yanlış yazdığın kelimeler ve zayıf harf içerenler daha sık çıkar.
+- 🔤 **Harf çifti analizi** — "ğı", "şı", "ıl" gibi geçişlerde ne kadar yavaş ve hatalı olduğunu gösterir.
 - 🗂️ **Kelime havuzu ve geçmiş** — yanlış kelimeler, son testler ve rekor takibi (🏆).
+
+## Modlar
+
+Menüde `M` ile değiştirilir.
+
+| Mod | Ne yapar |
+|-----|----------|
+| **Normal** | Rastgele kelimeler, süre dolunca biter. |
+| **Alıştırma** | Yanlış yazdığın kelimeler ve zayıf harf içerenler daha sık çıkar. |
+| **Zayıf harf drili** | Sabit 30 sn. Zayıf harflerin ve yavaş/hatalı **harf çiftlerin** yoğun olduğu özel bir set; veri yoksa normal kelimeler. |
+| **Hata düzeltmeli** | Yanlış yazılan kelime düzeltilmeden `Boşluk` ile geçilemez. |
+| **Ölüm modu** ☠ | İlk hatada (yanlış, eksik ya da fazla harf) test biter. |
+| **Hız limiti** ⚡ | İlk 8 sn tolerans; sonra son 5 sn'deki hızın limitin (`T` ile 20–80 WPM) altına düşerse test biter. |
+| **Ders** | Harfleri sırayla öğretir (ana sıra → üst sıra → alt sıra → ğ ü ş ö ç). Henüz açılmamış tuşlar soluk görünür, tuşlar basılacak **parmağa göre renklenir**. Ders geçmek için en az %90 doğruluk ve 8 doğru kelime gerekir; geçince sonraki ders açılır (`E` ile ders seç). |
+
+Elenerek biten testler "en yüksek WPM" rekoruna sayılmaz. Parmak renkleri diğer modlarda `F` ile açılır.
+Seçtiğin dil, süre, mod, switch ve ders ilerlemesi kaydedilir.
 
 ## Kısayollar
 
 | Ekran | Tuş | İşlev |
 |-------|-----|-------|
 | Menü | `Enter` / `L` / `D` / `M` | Başla / dil / süre / mod değiştir |
+| Menü | `T` / `E` / `F` | Hız limiti / ders seç / parmak renkleri |
 | Menü | `S` / `W` / `X` / `Q` | Switch sesi / istatistik / verileri sıfırla / çıkış |
 | Test | `Boşluk` | Kelimeyi onayla (boşken yok sayılır) |
 | Test | `Backspace` / `Tab` / `Esc` | Sil / yeniden başla / bitir ve sonucu gör |
 | Test | `F2` | Switch sesini değiştir |
-| İstatistik | `1` `2` `3` / `L` / `Esc` | Sekme / dil / geri |
+| İstatistik | `1` `2` `3` `4` / `L` / `Esc` | Sekme (harfler, havuz, geçmiş, harf çiftleri) / dil / geri |
 
 ## Puanlama
 
@@ -71,7 +94,7 @@ yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerek
 | `engine.py` | Terminalden bağımsız test mantığı (`Session`) |
 | `storage.py` | İstatistik/havuz kaydı ve analiz (JSON) |
 | `words.py` | Türkçe ve İngilizce kelime havuzları |
-| `layouts.py` | Türkçe Q ve İngilizce QWERTY konumları ve ekran klavyesi satırları |
+| `layouts.py` | Türkçe Q ve İngilizce QWERTY konumları, parmak eşlemesi, dersler |
 | `tools/screenshots.py` | README görsellerini üretir |
 | `tests/` | Birim testleri (`python -m unittest discover tests`) |
 | `data/` | Kayıtlı istatistikler (otomatik oluşur, git'e eklenmez) |
