@@ -45,64 +45,20 @@ def save(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def record_result(lang, target_words, typed_words, duration):
-    """Tamamlanan bir testi işler: istatistikleri günceller ve özet döndürür.
-
-    `typed_words` boşlukla onaylanmış (commit edilmiş) kelimelerdir.
-    """
+def record_session(lang, summary, letter_total, letter_errors):
+    """Biten testi kalıcı veriye işler (yanlış kelimeler, harf istatistikleri, geçmiş)."""
     data = load()
     d = data[lang]
-
-    correct_chars = 0        # doğru yazılan karakter sayısı
-    typed_chars = 0          # kullanıcının bastığı toplam karakter
-    correct_words = 0        # tamamen doğru yazılan kelime
-    mistyped_now = []        # bu testte yanlış yazılan kelimeler
-
-    for i, typed in enumerate(typed_words):
-        if i >= len(target_words):
-            break
-        target = target_words[i]
-        typed_chars += len(typed)
-
-        # Karakter bazında karşılaştırma
-        for j, tch in enumerate(target):
-            if tch.isspace():
-                continue
-            d["letter_total"][tch] = d["letter_total"].get(tch, 0) + 1
-            if j < len(typed) and typed[j] == tch:
-                correct_chars += 1
-            else:
-                d["letter_errors"][tch] = d["letter_errors"].get(tch, 0) + 1
-
-        if typed == target:
-            correct_words += 1
-        else:
-            d["mistyped"][target] = d["mistyped"].get(target, 0) + 1
-            mistyped_now.append(target)
-
-    minutes = duration / 60.0 if duration > 0 else 1 / 60.0
-    wpm = round((correct_chars / 5.0) / minutes)
-    raw_wpm = round((typed_chars / 5.0) / minutes)
-    accuracy = round(100.0 * correct_chars / typed_chars, 1) if typed_chars else 0.0
-
-    summary = {
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "lang": lang,
-        "duration": duration,
-        "wpm": wpm,
-        "raw_wpm": raw_wpm,
-        "correct_words": correct_words,
-        "total_words": len(typed_words),
-        "accuracy": accuracy,
-        "mistyped_now": mistyped_now,
-    }
-
+    for w in summary["mistyped_now"]:
+        d["mistyped"][w] = d["mistyped"].get(w, 0) + 1
+    for ch, n in letter_total.items():
+        d["letter_total"][ch] = d["letter_total"].get(ch, 0) + n
+    for ch, n in letter_errors.items():
+        d["letter_errors"][ch] = d["letter_errors"].get(ch, 0) + n
     d["history"].append({k: summary[k] for k in
                          ("date", "duration", "wpm", "correct_words", "accuracy")})
     d["history"] = d["history"][-100:]  # son 100 kayıt
-
     save(data)
-    return summary
 
 
 def weak_letters(lang, top=10, min_total=3):

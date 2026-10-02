@@ -33,7 +33,7 @@ TURKISH_WORDS = [
     "spor", "futbol", "basketbol", "voleybol", "yüzme", "koşu", "antrenman", "takım", "oyuncu", "maç",
     "müzik", "şarkı", "enstrüman", "gitar", "piyano", "keman", "davul", "flüt", "melodi", "ritim",
     "sanat", "resim", "heykel", "tiyatro", "sinema", "film", "roman", "şiir", "hikaye", "yazar",
-    "gökçe", "çığlık", "öğle", "üşümek", "ğ", "şöför", "çöp", "üçgen", "öğüt", "çığır",
+    "gökçe", "çığlık", "öğle", "üşümek", "şoför", "çöp", "üçgen", "öğüt", "çığır",
 ]
 
 ENGLISH_WORDS = [
@@ -64,4 +64,5 @@ ENGLISH_WORDS = [
 
 def get_wordlist(lang):
     """Dil koduna göre temel kelime listesini döndürür ('tr' veya 'en')."""
-    return TURKISH_WORDS if lang == "tr" else ENGLISH_WORDS
+    words = TURKISH_WORDS if lang == "tr" else ENGLISH_WORDS
+    return list(dict.fromkeys(words))  # tekrarlayan kelimeleri ele

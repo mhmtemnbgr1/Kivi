@@ -42,3 +42,11 @@ def key_info(lang, ch):
         return "konum bilinmiyor"
     row, hand = info
     return f"{row} sıra, {hand} el"
+
+
+# Ekrandaki klavye çizimi için fiziksel satırlar (soldan sağa).
+KEY_ROWS = {
+    "tr": ["fgğıodrnhpqw", "uieaütkmlyş", "jövcçzsb.,"],
+    "en": ["qwertyuiop", "asdfghjkl", "zxcvbnm,."],
+}
+ROW_OFFSET = [0, 1, 2]  # satırların yarım tuş kayması (gerçek klavye gibi)
