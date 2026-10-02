@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Türkçe ve İngilizce kelime havuzları.
 
-Türkçe liste, F klavyede sık kullanılan Türkçe harfleri (ç, ğ, ı, ö, ş, ü)
+Türkçe liste, Q klavyede sık kullanılan Türkçe harfleri (ç, ğ, ı, ö, ş, ü)
 içeren yaygın kelimelerden oluşur.
 """
 

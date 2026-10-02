@@ -23,6 +23,10 @@ pip install -r requirements.txt
 python typing_test.py
 ```
 
+Renkler siyah-beyaz görünüyorsa: ortamda `NO_COLOR` ayarlıdır. Kivi bunu otomatik yok sayar;
+terminalin renk modunu elle seçmek için `python typing_test.py --color 256` (veya `truecolor`, `16`) kullan.
+`--no-color` tek renkli görünüm sağlar.
+
 Python 3.9+ ve renk destekleyen bir terminal (Windows Terminal, PowerShell, iTerm2, …)
 yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerekir. Terminal 40+ satırsa klavye yüksek (3 satırlık) tuşlarla çizilir. IDE çıktı panelinde değil, gerçek bir terminalde çalıştır.
 
@@ -31,9 +35,9 @@ yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerek
 - 🌆 **Retro / synthwave tema** — neon renkler, animasyonlu gradyan logo, akan ses dalgası, akıcı süre çubuğu; tuşlar basılınca yanıp söner, sıradaki tuş nabız gibi parlar.
 - ⏱️ **Süre ayarlı test** — 15 / 30 / 60 / 120 sn. Süre ilk tuşa basınca başlar.
 - 📈 **Canlı WPM grafiği** ve doğruluk göstergesi, ilerleme çubuğu.
-- 🎹 **Mekanik klavye görünümü** — gölgeli tuş başlıkları, F klavye (Türkçe) ve QWERTY; sıradaki tuş mavi, yanlış basılan tuş kırmızı yanar, bastığın tuş aşağı iner.
+- 🎹 **Mekanik klavye görünümü** — gölgeli tuş başlıkları, Türkçe Q klavye ve QWERTY; sıradaki tuş mavi, yanlış basılan tuş kırmızı yanar, bastığın tuş aşağı iner.
 - 🔊 **Mekanik switch sesleri** — Mavi (clicky), Kırmızı (lineer), Kahverengi (tactile), Siyah (derin thock) veya sessiz. Sesler ek paket gerektirmeden otomatik üretilir; boşluk ve silme tuşunun sesi farklıdır.
-- 🇹🇷 / 🇬🇧 **İki dil** — Türkçe (F klavye) ve İngilizce (QWERTY).
+- 🇹🇷 / 🇬🇧 **İki dil** — Türkçe (Q klavye) ve İngilizce (QWERTY).
 - 🔥 **Zayıf harf ısı haritası** — hata oranına göre klavye üzerinde boyanır; tablo tuşun
   konumunu (sıra / el) da söyler.
 - 🎯 **Alıştırma modu** — yanlış yazdığın kelimeler ve zayıf harf içerenler daha sık çıkar.
@@ -67,7 +71,7 @@ yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerek
 | `engine.py` | Terminalden bağımsız test mantığı (`Session`) |
 | `storage.py` | İstatistik/havuz kaydı ve analiz (JSON) |
 | `words.py` | Türkçe ve İngilizce kelime havuzları |
-| `layouts.py` | F klavye / QWERTY konumları ve ekran klavyesi satırları |
+| `layouts.py` | Türkçe Q ve İngilizce QWERTY konumları ve ekran klavyesi satırları |
 | `tools/screenshots.py` | README görsellerini üretir |
 | `tests/` | Birim testleri (`python -m unittest discover tests`) |
 | `data/` | Kayıtlı istatistikler (otomatik oluşur, git'e eklenmez) |

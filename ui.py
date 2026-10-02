@@ -21,7 +21,7 @@ from theme import (BG, CYAN, DIM, FAINT, GREEN, ORANGE, PINK, PURPLE, RAINBOW, R
                    smooth_bar, wave)
 
 DURATIONS = [15, 30, 60, 120]
-LANGS = {"tr": "Türkçe · F klavye", "en": "English · QWERTY"}
+LANGS = {"tr": "Türkçe · Q klavye", "en": "English · QWERTY"}
 MODES = {"normal": "Normal", "practice": "Alıştırma · zayıf noktalar"}
 FPS = 1 / 20
 
