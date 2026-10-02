@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 import storage  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs")
-SIZE = (100, 46)
+SIZE = (100, 48)
 
 
 def seed_demo():
@@ -61,7 +61,7 @@ async def main():
                         "öğrenci", "çiçek", "şehir", "bilgi", "ekran", "zaman"]
         for ch in "merhaba dünya klavye hız":
             await pilot.press("space" if ch == " " else ch)
-        s.start = time.time() - 18                      # ~18 sn geçmiş gibi
+        app.screen.press("ı", True); s.start = time.time() - 18                      # ~18 sn geçmiş gibi
         # canlı grafik için örnek WPM verisi
         app.screen.query_one("Sparkline").data = [22, 31, 38, 41, 44, 43, 48, 52, 50, 55, 54, 58]
         await pilot.pause()

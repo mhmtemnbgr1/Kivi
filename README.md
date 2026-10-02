@@ -28,6 +28,7 @@ yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerek
 
 ## Özellikler
 
+- 🌆 **Retro / synthwave tema** — neon renkler, animasyonlu gradyan logo, akan ses dalgası, akıcı süre çubuğu; tuşlar basılınca yanıp söner, sıradaki tuş nabız gibi parlar.
 - ⏱️ **Süre ayarlı test** — 15 / 30 / 60 / 120 sn. Süre ilk tuşa basınca başlar.
 - 📈 **Canlı WPM grafiği** ve doğruluk göstergesi, ilerleme çubuğu.
 - 🎹 **Mekanik klavye görünümü** — gölgeli tuş başlıkları, F klavye (Türkçe) ve QWERTY; sıradaki tuş mavi, yanlış basılan tuş kırmızı yanar, bastığın tuş aşağı iner.
@@ -60,6 +61,7 @@ yeterlidir. Ses için Linux'ta `paplay`/`aplay`/`play` komutlarından biri gerek
 | Dosya | Görevi |
 |-------|--------|
 | `typing_test.py` | Giriş noktası |
+| `theme.py` | Retro palet, gradyanlar, büyük harf fontu, neon klavye çizimi |
 | `ui.py` | Textual arayüzü: menü, test, sonuç, istatistik |
 | `sound.py` | Switch seslerini sentezler ve çalar (Windows: winsound, macOS: afplay, Linux: paplay/aplay) |
 | `engine.py` | Terminalden bağımsız test mantığı (`Session`) |

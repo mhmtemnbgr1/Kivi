@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Kivi — Textual tabanlı canlı terminal arayüzü.
+"""Kivi — retro/synthwave temalı, animasyonlu Textual arayüzü.
 
-Ekranlar: Ana menü -> Test (canlı WPM grafiği + ekran klavyesi) -> Sonuç,
+Ekranlar: Ana menü -> Test (canlı WPM grafiği + neon mekanik klavye) -> Sonuç,
 İstatistikler (zayıf harf ısı haritası, kelime havuzu, geçmiş) ve sıfırlama onayı.
 """
+
+import time
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -11,113 +13,22 @@ from textual.containers import Center, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Sparkline, Static, TabbedContent, TabPane
 
-import time
-
 import engine
-import layouts
 import sound
 import storage
+from theme import (BG, CYAN, DIM, FAINT, GREEN, ORANGE, PINK, PURPLE, RAINBOW, RED, SUNSET,
+                   TEXT, YELLOW, big, chip, gradient_text, hints, render_keyboard,
+                   smooth_bar, wave)
 
 DURATIONS = [15, 30, 60, 120]
 LANGS = {"tr": "Türkçe · F klavye", "en": "English · QWERTY"}
-MODES = {"normal": "Normal", "practice": "Alıştırma (zayıf noktalar)"}
-
-# Renkler
-OK, BAD, PENDING, ACCENT = "#7ee787", "#ff7b72", "#6e7681", "#58a6ff"
-KEY_BG, KEY_FG = "#21262d", "#c9d1d9"
+MODES = {"normal": "Normal", "practice": "Alıştırma · zayıf noktalar"}
+FPS = 1 / 20
 
 
 # ---------------------------------------------------------------------------
-# Çizim yardımcıları
+# Yardımcılar
 # ---------------------------------------------------------------------------
-PLATE = "#161b22"   # klavye gövdesi (tuşların altındaki plaka)
-
-# (yüz rengi, kenar/gölge rengi, yazı rengi)
-CAP = ("#2d333b", "#1b1f24", "#adbac7")
-CAP_NEXT = ("#1f6feb", "#0b3d91", "#ffffff")
-CAP_WRONG = ("#da3633", "#7d1a18", "#ffffff")
-CAP_DOWN_OK = ("#3fb950", "#3fb950", "#04260f")
-CAP_DOWN_BAD = ("#f85149", "#f85149", "#ffffff")
-HEAT_HI = ("#da3633", "#7d1a18", "#ffffff")
-HEAT_MID = ("#f0883e", "#8a4a14", "#1b1f24")
-HEAT_LO = ("#d29922", "#7a5710", "#1b1f24")
-
-
-def render_keyboard(lang, nxt=None, wrong=None, heat=None, down=None, down_ok=True,
-                    tall=True):
-    """Mekanik klavye çizimi.
-
-    nxt: sıradaki tuş (mavi)   wrong: yanlış basılan tuş (kırmızı)
-    down: şu an basılı tuş (tuş aşağı iner)   heat: {harf: hata %} -> ısı haritası
-    tall: 3 satırlık yüksek tuşlar (küçük terminalde 2 satırlık).
-    """
-    def colors_for(ch):
-        if heat is not None:
-            rate = heat.get(ch)
-            if rate is None:
-                return CAP
-            return HEAT_HI if rate >= 25 else HEAT_MID if rate >= 12 else HEAT_LO
-        if ch == down:
-            return CAP_DOWN_OK if down_ok else CAP_DOWN_BAD
-        if ch == wrong:
-            return CAP_WRONG
-        if ch == nxt:
-            return CAP_NEXT
-        return CAP
-
-    rows = []   # her satır: [(etiket, genişlik, ch), ...]
-    for r, row in enumerate(layouts.KEY_ROWS[lang]):
-        keys = []
-        for ch in row:
-            label = "İ" if (ch == "i" and lang == "tr") else ch.upper()
-            keys.append((label, 5, ch))
-        rows.append((layouts.ROW_OFFSET[r] * 2, keys))
-    space_label = "BOŞLUK" if lang == "tr" else "SPACE"
-    rows.append((8, [(space_label.center(25), 25, " ")]))
-
-    out = Text()
-    for indent, keys in rows:
-        lines = [Text(), Text(), Text()] if tall else [Text(), Text()]
-        for line in lines:
-            line.append(" " * indent, style=f"on {PLATE}")
-        for label, w, ch in keys:
-            face, edge, fg = colors_for(ch)
-            pressed = ch == down and heat is None
-            if tall:
-                top, mid, bot = lines
-                if pressed:   # tuş aşağıda: üst kenar kaybolur, yüz bir satır iner
-                    top.append(" " * w, style=f"on {PLATE}")
-                    mid.append("▄" * w, style=f"{face} on {PLATE}")
-                    bot.append(label.center(w), style=f"bold {fg} on {face}")
-                else:
-                    top.append("▄" * w, style=f"{face} on {PLATE}")
-                    mid.append(label.center(w), style=f"bold {fg} on {face}")
-                    bot.append("▀" * w, style=f"{edge} on {PLATE}")
-            else:
-                mid, bot = lines
-                if pressed:
-                    mid.append(" " * w, style=f"on {PLATE}")
-                    bot.append(label.center(w), style=f"bold {fg} on {face}")
-                else:
-                    mid.append(label.center(w), style=f"bold {fg} on {face}")
-                    bot.append("▀" * w, style=f"{edge} on {PLATE}")
-            for line in lines:
-                line.append(" ", style=f"on {PLATE}")
-        for line in lines:
-            out.append_text(line)
-            out.append("\n")
-    out.rstrip()
-    return out
-
-
-def bar(frac, width=40):
-    full = int(max(0.0, min(1.0, frac)) * width)
-    t = Text()
-    t.append("━" * full, style=ACCENT)
-    t.append("━" * (width - full), style="#30363d")
-    return t
-
-
 def wrap_indices(words, width):
     lines, cur, cur_len = [], [], 0
     for i, w in enumerate(words):
@@ -132,30 +43,57 @@ def wrap_indices(words, width):
     return lines
 
 
-def render_word(target, typed, current):
+def render_word(target, typed, current, blink):
     t = Text()
     for j in range(max(len(target), len(typed))):
         tch = target[j] if j < len(target) else ""
         uch = typed[j] if j < len(typed) else None
         if current and uch is None and j == len(typed):
-            t.append(tch or " ", style="reverse")
+            t.append(tch or " ", style=f"bold {BG} on {CYAN}" if blink else f"bold {CYAN} underline")
         elif uch is None:
-            t.append(tch, style=PENDING)
+            t.append(tch, style=TEXT if current else FAINT)      # aktif kelime daha parlak
         elif j >= len(target):
-            t.append(uch, style=f"{BAD} underline")
+            t.append(uch, style=f"{RED} underline")
         elif uch == tch:
-            t.append(tch, style=OK)
+            t.append(tch, style=GREEN)
         else:
-            t.append(tch, style=f"bold {BAD}")
+            t.append(tch, style=f"bold {RED}")
     if current and len(typed) >= len(target):
-        t.append(" ", style="reverse")
+        t.append(" ", style=f"on {CYAN}" if blink else "")
     return t
+
+
+def label_row(name, value, color=CYAN):
+    t = Text()
+    t.append(f"  {name:<7}", style=DIM)
+    t.append("◂ ", style=FAINT)
+    t.append(value, style=f"bold {color}")
+    t.append(" ▸", style=FAINT)
+    return t
+
+
+class Animated(Screen):
+    """Her ekranın 20 FPS çalışan animasyon zamanlayıcısı."""
+
+    def on_mount(self):
+        self.t0 = time.time()
+        self.set_interval(FPS, self._frame)
+
+    @property
+    def t(self):
+        return time.time() - self.t0
+
+    def _frame(self):
+        self.animate(self.t)
+
+    def animate(self, t):
+        pass
 
 
 # ---------------------------------------------------------------------------
 # Ana menü
 # ---------------------------------------------------------------------------
-class HomeScreen(Screen):
+class HomeScreen(Animated):
     BINDINGS = [
         ("enter", "start", "Başla"),
         ("l", "lang", "Dil"),
@@ -171,53 +109,60 @@ class HomeScreen(Screen):
         with Center():
             with Vertical(id="home"):
                 yield Static(id="logo")
+                yield Static(id="tag")
+                yield Static(id="wave")
                 yield Static(id="settings")
+                yield Static(id="cta")
                 yield Static(id="best")
                 yield Static(id="help")
 
     def on_mount(self):
+        super().on_mount()
+        self.query_one("#settings").border_title = "◤ AYARLAR ◢"
+        self.query_one("#tag", Static).update(
+            Text("▓▒░  TERMİNALDE HIZLI YAZMA ANTRENMANI  ░▒▓", style=DIM, justify="center"))
         self.refresh_view()
+        self.animate(0)
 
     def on_screen_resume(self):
         self.refresh_view()
 
+    def animate(self, t):
+        self.query_one("#logo", Static).update(big("KIVI", RAINBOW, phase=t * 0.18))
+        self.query_one("#wave", Static).update(wave(64, t))
+        blink = int(t * 1.6) % 2 == 0
+        cta = Text(justify="center")
+        cta.append("▶  ENTER'A BAS  ◀" if blink else "                ",
+                   style=f"bold {YELLOW}")
+        self.query_one("#cta", Static).update(cta)
+
     def refresh_view(self):
         app = self.app
-        logo = Text(justify="center")
-        logo.append("K I V I\n", style=f"bold {ACCENT}")
-        logo.append("terminalde hızlı yazma antrenmanı", style=PENDING)
-        self.query_one("#logo", Static).update(logo)
-
         s = Text()
-        s.append("  Dil    ", style=PENDING)
-        s.append(f"{LANGS[app.lang]}\n", style="bold")
-        s.append("  Süre   ", style=PENDING)
-        s.append(f"{app.duration} sn\n", style="bold")
-        s.append("  Mod    ", style=PENDING)
-        s.append(f"{MODES[app.mode]}\n", style="bold")
-        s.append("  Switch ", style=PENDING)
-        s.append(app.sound.label() if app.sound.available else "ses çalınamıyor", style="bold")
+        s.append_text(label_row("DİL", LANGS[app.lang], CYAN))
+        s.append("\n")
+        s.append_text(label_row("SÜRE", f"{app.duration} saniye", YELLOW))
+        s.append("\n")
+        s.append_text(label_row("MOD", MODES[app.mode], PINK))
+        s.append("\n")
+        s.append_text(label_row(
+            "SWITCH", app.sound.label() if app.sound.available else "ses çalınamıyor", GREEN))
         self.query_one("#settings", Static).update(s)
 
         hist = storage.history(app.lang)
         best = Text(justify="center")
         if hist:
             top = max(h["wpm"] for h in hist)
-            best.append(f"En yüksek: {top} WPM   ·   {len(hist)} test", style=OK)
+            best.append("★ EN YÜKSEK ", style=DIM)
+            best.append(f"{top} WPM", style=f"bold {YELLOW}")
+            best.append(f"   ·   {len(hist)} test", style=DIM)
         else:
-            best.append("Henüz test yok — ilk testini başlat!", style=PENDING)
+            best.append("henüz skor yok — ilk rekoru sen kır!", style=DIM)
         self.query_one("#best", Static).update(best)
 
-        h = Text(justify="center")
-        h.append("Enter", style=f"bold {ACCENT}"); h.append(" başla   ")
-        h.append("L", style=f"bold {ACCENT}"); h.append(" dil   ")
-        h.append("D", style=f"bold {ACCENT}"); h.append(" süre   ")
-        h.append("M", style=f"bold {ACCENT}"); h.append(" mod   ")
-        h.append("S", style=f"bold {ACCENT}"); h.append(" switch sesi\n")
-        h.append("W", style=f"bold {ACCENT}"); h.append(" istatistik   ")
-        h.append("X", style=f"bold {ACCENT}"); h.append(" sıfırla   ")
-        h.append("Q", style=f"bold {ACCENT}"); h.append(" çıkış")
-        self.query_one("#help", Static).update(h)
+        self.query_one("#help", Static).update(hints([
+            ("L", "dil"), ("D", "süre"), ("M", "mod"), ("S", "switch"),
+            ("W", "istatistik"), ("X", "sıfırla"), ("Q", "çık")], PURPLE))
 
     def action_start(self):
         self.app.push_screen(TestScreen())
@@ -262,10 +207,12 @@ class ConfirmScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         t = Text(justify="center")
-        t.append(self.question + "\n\n", style="bold")
-        t.append("E", style=f"bold {BAD}"); t.append(" evet, sil     ")
-        t.append("H", style=f"bold {OK}"); t.append(" hayır")
+        t.append("⚠  ", style=f"bold {YELLOW}")
+        t.append(self.question + "\n\n", style=f"bold {TEXT}")
+        t.append_text(chip("E", "evet, sil", RED))
+        t.append_text(chip("H", "hayır", GREEN))
         yield Static(t, id="confirm")
+
 
     def action_yes(self):
         self.dismiss(True)
@@ -277,8 +224,8 @@ class ConfirmScreen(ModalScreen):
 # ---------------------------------------------------------------------------
 # Test ekranı
 # ---------------------------------------------------------------------------
-class TestScreen(Screen):
-    """Canlı test: kelimeler, WPM grafiği ve sıradaki tuşu gösteren klavye."""
+class TestScreen(Animated):
+    """Canlı test: kelimeler, WPM grafiği ve sıradaki tuşu gösteren neon klavye."""
 
     def compose(self) -> ComposeResult:
         with Center():
@@ -291,37 +238,36 @@ class TestScreen(Screen):
                 yield Static(id="hint")
 
     def on_mount(self):
+        super().on_mount()
+        self.query_one("#words").border_title = "◤ YAZ ◢"
+        self.query_one("#spark").border_title = "canlı WPM"
         self.new_session()
-        self.set_interval(0.1, self.tick)
 
     def new_session(self):
         a = self.app
         self.session = engine.Session(a.lang, a.duration, a.mode)
         self._wrap_key = None
-        self.down, self.down_ok, self.down_until = None, True, 0.0
-        self.flash = ""
+        self.pressed = {}
+        self.flash, self.flash_until = "", 0.0
         self.query_one("#spark", Sparkline).data = [0]
-        hint = Text(justify="center")
-        hint.append("Esc", style=f"bold {ACCENT}"); hint.append(" bitir   ")
-        hint.append("Tab", style=f"bold {ACCENT}"); hint.append(" yeniden başla   ")
-        hint.append("Boşluk", style=f"bold {ACCENT}"); hint.append(" onayla   ")
-        hint.append("F2", style=f"bold {ACCENT}"); hint.append(" switch sesi")
-        self.query_one("#hint", Static).update(hint)
+        self.query_one("#hint", Static).update(hints([
+            ("ESC", "bitir"), ("TAB", "yeniden"), ("SPACE", "onayla"),
+            ("F2", "switch sesi")], PURPLE))
         self.redraw()
 
     def on_resize(self, event):
         self._wrap_key = None
-        self.redraw()
 
-    def tick(self):
+    def animate(self, t):
         s = self.session
-        if self.down and time.time() > self.down_until:
-            self.down = None
+        now = time.time()
+        self.pressed = {k: v for k, v in self.pressed.items() if now - v[0] < 0.5}
+        if self.flash and now > self.flash_until:
+            self.flash = ""
         if s.started:
             s.sample()
-            spark = self.query_one("#spark", Sparkline)
             if s.samples:
-                spark.data = list(s.samples)
+                self.query_one("#spark", Sparkline).data = list(s.samples)
             if s.is_over():
                 self.end()
                 return
@@ -341,7 +287,7 @@ class TestScreen(Screen):
         elif key == "f2":
             snd.cycle()
             snd.play("key")
-            self.flash = f"Switch: {snd.label()}"
+            self.flash, self.flash_until = f"♪ switch: {snd.label()}", time.time() + 2.0
         elif key in ("space", "enter"):
             if s.commit():
                 snd.play("space")
@@ -360,10 +306,8 @@ class TestScreen(Screen):
         self.redraw()
 
     def press(self, ch, ok):
-        """Basılan tuşu kısa süre 'aşağıda' göster."""
-        self.down = {"İ": "i", "I": "ı"}.get(ch, ch.lower())
-        self.down_ok = ok
-        self.down_until = time.time() + 0.14
+        """Basılan tuş aşağı iner ve yavaşça söner."""
+        self.pressed[{"İ": "i", "I": "ı"}.get(ch, ch.lower())] = (time.time(), ok)
 
     def end(self):
         s = self.session
@@ -378,58 +322,63 @@ class TestScreen(Screen):
 
     def redraw(self):
         s = self.session
+        t = time.time()
         left = int(s.remaining()) if s.started else s.duration
+
+        acc = s.accuracy()
+        acc_color = GREEN if acc >= 95 else YELLOW if acc >= 85 else RED
         info = Text(justify="center")
-        info.append(f"{LANGS[s.lang]} · {MODES[s.mode]}\n", style=PENDING)
-        info.append(f"{left}", style=f"bold {ACCENT}")
-        info.append(" sn    ")
-        info.append(f"{s.wpm()}", style=f"bold {OK}")
-        info.append(" WPM    ")
-        acc_style = OK if s.accuracy() >= 95 else ("#d29922" if s.accuracy() >= 85 else BAD)
-        info.append(f"%{s.accuracy():g}", style=f"bold {acc_style}")
-        info.append(" doğruluk    ")
-        info.append(f"{s.correct_words()}", style="bold")
-        info.append(" kelime")
-        if self.flash:
-            info.append(f"\n{self.flash}", style=ACCENT)
+        info.append(f"{LANGS[s.lang]} · {MODES[s.mode]}\n", style=FAINT)
+        info.append(f"⏱ {left}s", style=f"bold {CYAN}")
+        info.append("   ")
+        info.append(f"⚡ {s.wpm()} WPM", style=f"bold {YELLOW}")
+        info.append("   ")
+        info.append(f"◎ %{acc:g}", style=f"bold {acc_color}")
+        info.append("   ")
+        info.append(f"✔ {s.correct_words()}", style=f"bold {PINK}")
+        info.append("\n")
+        info.append(self.flash, style=GREEN)
         self.query_one("#info", Static).update(info)
 
-        frac = s.remaining() / s.duration if s.started else 1.0
-        self.query_one("#timebar", Static).update(bar(frac, 60))
-        if not s.started:
-            self.query_one("#timebar", Static).update(
-                Text("İlk tuşa bastığında süre başlar", style=PENDING, justify="center"))
+        if s.started:
+            self.query_one("#timebar", Static).update(smooth_bar(s.remaining() / s.duration, 64))
+        else:
+            blink = int(t * 2) % 2 == 0
+            self.query_one("#timebar", Static).update(Text(
+                "İlk tuşa bastığında süre başlar" if blink else "",
+                style=DIM, justify="center"))
 
-        width = max(30, min(self.query_one("#words", Static).size.width or 80, 90) - 2)
+        width = self.query_one("#words", Static).size.width or 80
+        width = max(30, min(width, 90))
         key = (len(s.words), width)
         if key != self._wrap_key:
             self._lines = wrap_indices(s.words, width)
             self._wrap_key = key
         cur_line = next((i for i, ln in enumerate(self._lines) if s.index in ln), 0)
+        blink = int(t * 2.5) % 2 == 0
         body = Text()
         for ln in self._lines[cur_line:cur_line + 3]:
             for n, wi in enumerate(ln):
                 if n:
                     body.append(" ")
                 if wi < s.index:
-                    body.append_text(render_word(s.words[wi], s.typed[wi], False))
+                    body.append_text(render_word(s.words[wi], s.typed[wi], False, blink))
                 elif wi == s.index:
-                    body.append_text(render_word(s.words[wi], s.current, True))
+                    body.append_text(render_word(s.words[wi], s.current, True, blink))
                 else:
-                    body.append(s.words[wi], style=PENDING)
+                    body.append(s.words[wi], style=FAINT)
             body.append("\n")
         self.query_one("#words", Static).update(body)
 
-        self.query_one("#keyboard", Static).update(
-            render_keyboard(s.lang, nxt=s.next_char(), wrong=s.last_wrong,
-                            down=self.down, down_ok=self.down_ok,
-                            tall=self.size.height >= 40))
+        self.query_one("#keyboard", Static).update(render_keyboard(
+            s.lang, t=t, nxt=s.next_char(), wrong=s.last_wrong,
+            pressed=self.pressed, tall=self.size.height >= 42))
 
 
 # ---------------------------------------------------------------------------
 # Sonuç ekranı
 # ---------------------------------------------------------------------------
-class ResultScreen(Screen):
+class ResultScreen(Animated):
     BINDINGS = [("enter", "again", "Tekrar"), ("r", "again", "Tekrar"),
                 ("w", "stats", "İstatistik"), ("escape", "menu", "Menü"),
                 ("m", "menu", "Menü")]
@@ -441,39 +390,49 @@ class ResultScreen(Screen):
     def compose(self) -> ComposeResult:
         with Center():
             with Vertical(id="result"):
+                yield Static(id="banner")
                 yield Static(id="big")
+                yield Static(id="unit")
                 yield Sparkline(self.summary["samples"] or [0], id="rspark")
                 yield Static(id="details")
                 yield Static(id="rhelp")
 
     def on_mount(self):
+        super().on_mount()
         m = self.summary
-        big = Text(justify="center")
-        big.append(f"{m['wpm']}", style=f"bold {OK}")
-        big.append(" WPM\n", style=PENDING)
-        if m["wpm"] > m["prev_best"] and m["prev_best"]:
-            big.append("🏆 Yeni rekor!", style="bold #d29922")
-        elif not m["prev_best"]:
-            big.append("İlk kaydın!", style="bold #d29922")
-        else:
-            big.append(f"En yüksek: {m['prev_best']} WPM", style=PENDING)
-        self.query_one("#big", Static).update(big)
+        self.query_one("#unit", Static).update(Text("W P M", style=DIM, justify="center"))
 
         d = Text(justify="center")
-        d.append(f"Ham {m['raw_wpm']} WPM   ·   Doğruluk %{m['accuracy']:g}   ·   "
-                 f"{m['correct_words']}/{m['total_words']} doğru kelime   ·   {m['duration']} sn\n\n")
+        for name, val, color in (("HAM", f"{m['raw_wpm']}", CYAN),
+                                 ("DOĞRULUK", f"%{m['accuracy']:g}", GREEN),
+                                 ("KELİME", f"{m['correct_words']}/{m['total_words']}", PINK),
+                                 ("SÜRE", f"{m['duration']}s", YELLOW)):
+            d.append(f" {name} ", style=f"bold {BG} on {color}")
+            d.append(f" {val}    ", style=f"bold {color}")
+        d.append("\n\n")
         if m["mistyped_now"]:
-            d.append("Yanlış kelimeler: ", style=BAD)
-            d.append(", ".join(dict.fromkeys(m["mistyped_now"]))[:300])
+            d.append("yanlışlar: ", style=RED)
+            d.append(", ".join(dict.fromkeys(m["mistyped_now"]))[:300], style=TEXT)
         else:
-            d.append("Hiç yanlış yok! 🎉", style=OK)
+            d.append("★ hiç yanlış yok! ★", style=f"bold {GREEN}")
         self.query_one("#details", Static).update(d)
+        self.query_one("#rhelp", Static).update(hints([
+            ("ENTER", "tekrar"), ("W", "istatistik"), ("ESC", "menü")], PURPLE))
+        self.animate(0)
 
-        h = Text(justify="center")
-        h.append("Enter", style=f"bold {ACCENT}"); h.append(" tekrar   ")
-        h.append("W", style=f"bold {ACCENT}"); h.append(" istatistik   ")
-        h.append("Esc", style=f"bold {ACCENT}"); h.append(" menü")
-        self.query_one("#rhelp", Static).update(h)
+    def animate(self, t):
+        m = self.summary
+        self.query_one("#big", Static).update(big(str(m["wpm"]), SUNSET, phase=t * 0.15, scale=2))
+        record = m["wpm"] > m["prev_best"]
+        banner = Text(justify="center")
+        if record and m["prev_best"]:
+            banner.append("★ ★ ★  YENİ REKOR  ★ ★ ★" if int(t * 2.5) % 2 == 0
+                          else "☆ ☆ ☆  YENİ REKOR  ☆ ☆ ☆", style=f"bold {YELLOW}")
+        elif not m["prev_best"]:
+            banner.append("★  İLK SKORUN  ★", style=f"bold {YELLOW}")
+        else:
+            banner.append(f"en yüksek: {m['prev_best']} WPM", style=DIM)
+        self.query_one("#banner", Static).update(banner)
 
     def action_again(self):
         self.app.switch_screen(TestScreen())
@@ -488,7 +447,7 @@ class ResultScreen(Screen):
 # ---------------------------------------------------------------------------
 # İstatistik ekranı
 # ---------------------------------------------------------------------------
-class StatsScreen(Screen):
+class StatsScreen(Animated):
     BINDINGS = [("escape", "back", "Geri"), ("q", "back", "Geri"),
                 ("l", "lang", "Dil"),
                 ("1", "tab('weak')", "Zayıf harfler"),
@@ -511,28 +470,34 @@ class StatsScreen(Screen):
                 yield Static(id="shelp")
 
     def on_mount(self):
+        super().on_mount()
         for t, cols in (("weak_t", ("Harf", "Hata", "Deneme", "Oran", "Konum")),
                         ("pool_t", ("#", "Kelime", "Kaç kez")),
                         ("hist_t", ("Tarih", "Süre", "WPM", "Doğru kel.", "Doğruluk"))):
             tbl = self.query_one(f"#{t}", DataTable)
             tbl.add_columns(*cols)
             tbl.zebra_stripes = True
+        self.query_one("#hspark").border_title = "WPM gelişimi"
         self.load()
+
+    def animate(self, t):
+        self.query_one("#stitle", Static).update(gradient_text(
+            f"▓▒░  İSTATİSTİKLER · {LANGS[self.app.lang]}  ░▒▓", RAINBOW, t * 0.15))
 
     def load(self):
         lang = self.app.lang
-        self.query_one("#stitle", Static).update(
-            Text(f"İstatistikler — {LANGS[lang]}", style=f"bold {ACCENT}", justify="center"))
-
         rows = storage.weak_letters(lang, top=12)
         t = self.query_one("#weak_t", DataTable)
         t.clear()
         for ch, err, total, rate, pos in rows:
-            t.add_row(Text(ch, style=f"bold {BAD}"), str(err), str(total), f"%{rate:g}", pos)
+            color = RED if rate >= 25 else ORANGE if rate >= 12 else YELLOW
+            t.add_row(Text(ch, style=f"bold {color}"), str(err), str(total),
+                      Text(f"%{rate:g}", style=color), pos)
         heat = {ch: rate for ch, _, _, rate, _ in storage.weak_letters(lang, top=99)}
-        kb = render_keyboard(lang, heat=heat, tall=False)
-        if not rows:
-            kb = Text("Henüz yeterli veri yok. Birkaç test yap!", style=PENDING, justify="center")
+        if rows:
+            kb = render_keyboard(lang, heat=heat, tall=False)
+        else:
+            kb = Text("henüz yeterli veri yok — birkaç test yap!", style=DIM, justify="center")
         self.query_one("#heat", Static).update(kb)
 
         t = self.query_one("#pool_t", DataTable)
@@ -544,15 +509,12 @@ class StatsScreen(Screen):
         t = self.query_one("#hist_t", DataTable)
         t.clear()
         for h in reversed(hist[-30:]):
-            t.add_row(h["date"], f"{h['duration']} sn", str(h["wpm"]),
+            t.add_row(h["date"], f"{h['duration']} sn", Text(str(h["wpm"]), style=f"bold {YELLOW}"),
                       str(h["correct_words"]), f"%{h['accuracy']:g}")
         self.query_one("#hspark", Sparkline).data = [h["wpm"] for h in hist[-40:]] or [0]
 
-        h = Text(justify="center")
-        h.append("1/2/3", style=f"bold {ACCENT}"); h.append(" sekme   ")
-        h.append("L", style=f"bold {ACCENT}"); h.append(" dil   ")
-        h.append("Esc", style=f"bold {ACCENT}"); h.append(" geri")
-        self.query_one("#shelp", Static).update(h)
+        self.query_one("#shelp", Static).update(hints([
+            ("1 2 3", "sekme"), ("L", "dil"), ("ESC", "geri")], PURPLE))
 
     def action_tab(self, name):
         self.query_one("#tabs", TabbedContent).active = name
@@ -569,31 +531,59 @@ class StatsScreen(Screen):
 class KiviApp(App):
     TITLE = "Kivi"
     CSS = """
-    Screen { background: #0d1117; align: center middle; }
-    #home, #test, #result, #stats { width: 92%; max-width: 92; height: auto; }
-    #logo { content-align: center middle; margin-bottom: 1; }
-    #settings { width: auto; margin: 0 0 1 0; padding: 1 4; border: round #30363d; }
+    Screen { background: #140a24; align: center middle; }
+    #home, #test, #result, #stats { width: 94%; max-width: 96; height: auto; }
     #home Static, #test Static, #result Static { width: 100%; }
-    #settings { width: auto; }
+
+    /* Menü */
+    #logo { height: 5; margin-top: 1; text-align: center; }
+    #tag, #best, #cta { text-align: center; height: 1; }
+    #wave { height: 1; margin: 1 0; text-align: center; }
+    #settings { width: 52; height: auto; padding: 1 2; margin: 1 0;
+                border: heavy #ff2e97; border-title-color: #ffd23f;
+                border-title-align: center; background: #1d1033; }
     #home { align-horizontal: center; }
-    #best { margin: 1 0; text-align: center; }
-    #help, #hint, #rhelp, #shelp { text-align: center; margin-top: 1; color: #8b949e; }
-    #info { text-align: center; margin-bottom: 1; }
-    #timebar { text-align: center; margin-bottom: 1; }
-    #words { height: 5; padding: 1 2; border: round #30363d; }
-    #spark { height: 3; margin: 1 0; }
-    Sparkline > .sparkline--max-color { color: #7ee787; }
-    Sparkline > .sparkline--min-color { color: #58a6ff; }
-    #keyboard { height: auto; text-align: center; }
-    #big { text-align: center; margin: 1 0; }
-    #rspark { height: 4; margin: 1 0; }
+    #settings { margin-left: 0; }
+    #help, #hint, #rhelp, #shelp { text-align: center; margin-top: 1; }
+
+    /* Test */
+    #info { text-align: center; height: 3; }
+    #timebar { height: 1; margin-bottom: 1; }
+    #words { height: 9; padding: 1 3; border: double #00e5ff;
+             border-title-color: #ff2e97; border-title-align: center;
+             background: #1d1033; }
+    #spark { height: 4; margin: 1 0 0 0; border: round #5b2a86;
+             border-title-color: #8a74a8; padding: 0 1; }
+    Sparkline > .sparkline--max-color { color: #ff2e97; }
+    Sparkline > .sparkline--min-color { color: #00e5ff; }
+    #keyboard { height: auto; text-align: center; margin-top: 1; }
+
+    /* Sonuç */
+    #banner { height: 1; text-align: center; margin: 1 0; }
+    #big { height: 5; text-align: center; }
+    #unit { height: 1; text-align: center; margin: 1 0 0 0; }
+    #rspark { height: 5; margin: 1 0; }
     #details { text-align: center; }
+
+    /* İstatistik */
+    #stitle { height: 1; margin-bottom: 1; }
     #heat { height: auto; margin: 1 0; text-align: center; }
-    #weak_t, #pool_t, #hist_t { height: 14; }
-    #hspark { height: 3; margin-bottom: 1; }
-    ConfirmScreen { align: center middle; }
-    #confirm { width: 50; height: auto; padding: 1 2; border: round #da3633;
-               background: #161b22; }
+    #weak_t, #pool_t, #hist_t { height: 14; background: #1d1033; }
+    #hspark { height: 5; margin-bottom: 1; border: round #5b2a86;
+              border-title-color: #8a74a8; }
+    TabbedContent { background: #140a24; }
+    Tabs { background: #140a24; }
+    Tab { color: #8a74a8; background: #140a24; }
+    Tab.-active { color: #ff2e97; text-style: bold; background: #140a24; }
+    Underline > .underline--bar { color: #ff2e97; background: #3a1c5c; }
+    DataTable { color: #f3e9ff; }
+    DataTable > .datatable--header { background: #2a1744; color: #00e5ff; text-style: bold; }
+    DataTable > .datatable--cursor { background: #5b2a86; color: #ffffff; }
+    DataTable > .datatable--even-row { background: #231240; }
+
+    ConfirmScreen { align: center middle; background: #140a24 70%; }
+    #confirm { width: 54; height: auto; padding: 1 2; border: heavy #ff3b5c;
+               background: #1d1033; text-align: center; }
     """
 
     def __init__(self):
